@@ -28,7 +28,7 @@ set(SOURCES
 )
 
 # 6. Create the Executable
-add_executable(my_nids ${SOURCES})
+add_executable(n1ds ${SOURCES})
 
 # 7. Link libpcap to your executable
-target_link_libraries(my_nids ${PCAP_LIB})
+target_link_libraries(n1ds ${PCAP_LIB})

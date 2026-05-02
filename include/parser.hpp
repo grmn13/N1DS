@@ -1,19 +1,57 @@
 #pragma once
+
+#include <iostream>
 #include <string>
 #include <cstring>
+#include <vector>
+#include <cmath>
 #include <unordered_set>
 #include <fstream>
-#include <vector>
+#include <unordered_set>
 #include <stack>
 #include <utility>
 #include <arpa/inet.h>
 
+#include <thread>
+#include <chrono>
+
 #define FLAG_IF "-i"
+#define FLAG_BL "-b"
 
-class TxtParser{
+struct ip_range{
 
-
+	int prefix;
+	uint32_t net_ip;
 };
+
+int validate_line(std::string _line, ip_range &_range);
+int parse_blacklist(std::string _blist_name, std::unordered_set<uint32_t> &_bl_ip_addrs);
+
+
+template<typename T>
+void progress_bar(T idx, T start, T end, int width){
+
+	//the formula for this mapping is, given 2 ranges (0 -> width) and (start -> end)
+	//and a value(idx) to map
+	//from the first range to the second:
+	//	fst_r1 + (lst_range2 - fst_range2) * ((idx - fst_range1) / (lst_range1 - fst_range1))
+	T mapped_value = width * ((double)(idx - start) / (double)(end - start));
+
+	std::cout << "\r\033[K";
+	std::cout << "[";
+	for(int i = 0; i < width; i++){
+
+		if(i < mapped_value){
+
+			std::cout << "#";
+		}
+		else{
+			std::cout << " ";
+		}
+		//std::this_thread::sleep_for(std::chrono::milliseconds(500)); // 0.5 seconds
+	}
+	std::cout << "]" << std::flush;
+}
 
 class ArgParser{
 
@@ -22,12 +60,25 @@ class ArgParser{
 	struct {
 
 		std::pair<bool, std::string> interface;
+		std::pair<bool, std::string> blist_name;
 	} flags;
+
+
+	std::string help_mesg = 
+	"\nusage: n1ds [-i interface][-b blacklist-path]\n\n"
+	"       e.g n1ds -i eth0 -b /usr/share/blacklist.txt\n\n"
+	"       blacklist format must be individual, new-line separated, CIDR address ranges\n\n";
 
 	std::stack<std::string> errors;
 
 	ArgParser(int argc, char* argv[]);
 
+	int flush_err();
+
+	private:
+
+	bool req_flags; // true if all required flags are set
+	
 	//checks if the flag comes with an argument
 	int verifyFlag(int _idx, int _arc, std::string errmesg);
 

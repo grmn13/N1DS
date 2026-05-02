@@ -39,11 +39,9 @@ int NetManager::init(){
 		dev = dev->next;
 	}
 
-	if(!if_exists){
-
-		std::cerr << "ERR: selected interface does not exists" << std::endl;
-	}
-
+	//the interface not existing gets handled automatically by the error produced
+	//on the session being nullptr
+	
 	session = pcap_open_live(input.if_target.c_str(), 65535, 1, 1000, errbuf);
 
 	if(session == nullptr){
