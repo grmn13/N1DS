@@ -24,8 +24,10 @@ struct ip_range{
 	uint32_t net_ip;
 };
 
-int validate_line(std::string _line, ip_range &_range);
-int parse_blacklist(std::string _blist_name, std::unordered_set<uint32_t> &_bl_ip_addrs);
+//int validate_line(std::string _line, ip_range &_range);
+int validate_line_syx(std::string _line, std::vector<ip_range> &ranges_vector);
+void insert_addrs_from_range(const ip_range &range, std::unordered_set<uint32_t> &blacklist);
+int parse_blacklist(std::string _blist_name, std::unordered_set<uint32_t> &_blacklist);
 
 
 template<typename T>

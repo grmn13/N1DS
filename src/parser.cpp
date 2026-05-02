@@ -1,6 +1,8 @@
 #include "parser.hpp"
 
-int validate_line(std::string _line, ip_range &_range){
+int validate_line_syx(std::string _line, std::vector<ip_range> &ranges_vector){
+
+	ip_range range_container;
 
 	int dots = 0; //needs to reach 3
 	int fw_slash = 0;
@@ -104,22 +106,46 @@ int validate_line(std::string _line, ip_range &_range){
 	if(return_error == 0){
 
 		//fill in the data of the struct
-		_range.prefix = chunk_val;
-		inet_pton(AF_INET, address_str.c_str(), &_range.net_ip); //convert network address to big endian
+		range_container.prefix = chunk_val;
+		inet_pton(AF_INET, address_str.c_str(), &range_container.net_ip); //convert network address to big endian
+		ranges_vector.push_back(range_container);
 	}
 
 	return return_error;
 };
 
-int parse_blacklist(std::string _blist_name, std::unordered_set<uint32_t> &_bl_ip_addrs){
+void insert_addrs_from_range(const ip_range &range, std::unordered_set<uint32_t> &blacklist){
+
+	struct in_addr info_addr;
+
+	//get ip range given the network addr and mask
+	uint32_t host_ip = ntohl(range.net_ip);
+	uint32_t mask = (0xFFFFFFFFu << (32 - range.prefix));
+
+	uint32_t range_start = host_ip;
+	uint32_t range_end = range_start | ~mask;
+
+	info_addr.s_addr = range.net_ip;
+	std::cout << "\r\033[K" << "Loading range " << inet_ntoa(info_addr) << "/" << range.prefix << std::endl;
+
+	//loop from first ip to last
+	for(uint32_t i = range_start; i <= range_end; i++){
+
+		progress_bar(i, range_start, range_end, 30);
+
+		//insert every ip into the unordered_set
+		blacklist.insert(htonl(i));
+	}
+}
+
+int parse_blacklist(std::string _blist_name, std::unordered_set<uint32_t> &_blacklist){
 
 	std::string line;
+	std::vector<ip_range> ranges;
 
 	int line_num = 1;
 
 	bool errors = false;
-
-	ip_range range;
 
 	std::ifstream file_bl(_blist_name);
 
@@ -129,52 +155,25 @@ int parse_blacklist(std::string _blist_name, std::unordered_set<uint32_t> &_bl_i
 		return 1;
 	}
 
-	//loop once over file to validate syntax
 	while(getline(file_bl, line) && !file_bl.eof()){
 
-	}
-
-	while(getline(file_bl, line) && !file_bl.eof()){
-
-		int validated = validate_line(line, range);
+		int validated = validate_line_syx(line, ranges);
 
 		if(validated == 1){
 
 			std::cerr << "Syntax error on " << _blist_name << " line " << line_num << std::endl;
-			errors = true;
-		}
-		else if(validated == 0){
-
-			struct in_addr info_addr;
-
-			//get ip range given the network addr and mask
-			uint32_t host_ip = ntohl(range.net_ip);
-			uint32_t mask = (0xFFFFFFFFu << (32 - range.prefix));
-
-			uint32_t range_start = host_ip;
-			uint32_t range_end = range_start | ~mask;
-
-			info_addr.s_addr = range.net_ip;
-			std::cout << "\r\033[K" << "Loading range " << inet_ntoa(info_addr) << "/" << range.prefix << std::endl;
-
-			//loop from first ip to last
-			for(uint32_t i = range_start; i <= range_end; i++){
-
-				progress_bar(i, range_start, range_end, 30);
-
-				//insert every ip into the unordered_set
-				_bl_ip_addrs.insert(htonl(i));
-			}
+			return 1;
 		}
 
 		line_num++;
+		
+	}
+
+	for(const ip_range &ip_r : ranges){
+
+		insert_addrs_from_range(ip_r, _blacklist);
 	}
 	std::cout << std::endl;
-
-	if(errors){
-
-		return 1;
-	}
 
 	return 0;
 }

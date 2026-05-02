@@ -21,9 +21,9 @@ int main(int argc, char* argv[]){
 	nm.init();
 
 	//black listed ip addresses
-	std::unordered_set<uint32_t> bl_ip_addrs;
+	std::unordered_set<uint32_t> blacklist;
 
-	int validate_bl = parse_blacklist(clargs.flags.blist_name.second, bl_ip_addrs);
+	int validate_bl = parse_blacklist(clargs.flags.blist_name.second, blacklist);
 
 	if(validate_bl == 1){
 
