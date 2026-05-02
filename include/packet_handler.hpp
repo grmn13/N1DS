@@ -9,7 +9,7 @@
 
 struct Context{
 
-	std::unordered_set<uint32_t>* blacklist_ptr;
+	std::vector<ip_r>* blacklist_ptr;
 	std::ofstream* logf;
 	std::string interface;
 	int link_type;

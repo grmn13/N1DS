@@ -1,9 +1,8 @@
 #include "parser.hpp"
 
-int validate_line_syx(std::string _line, std::vector<ip_range> &ranges_vector){
+int validate_line_syx(std::string _line, std::vector<prefix_ip_range> &ranges_vector){
 
-	ip_range range_container;
-
+	prefix_ip_range range_container;
 	int dots = 0; //needs to reach 3
 	int fw_slash = 0;
 	int chunk_size = 0; //cant be bigger than 2 ( 0 - 1 - 2)
@@ -103,7 +102,11 @@ int validate_line_syx(std::string _line, std::vector<ip_range> &ranges_vector){
 			}
 		}
 	}
-	if(return_error == 0){
+	if(return_error == 0 && (fw_slash == false || chunk_val <= 0)){
+
+		return_error = 1;
+	}
+	else if(return_error == 0){
 
 		//fill in the data of the struct
 		range_container.prefix = chunk_val;
@@ -114,37 +117,45 @@ int validate_line_syx(std::string _line, std::vector<ip_range> &ranges_vector){
 	return return_error;
 };
 
-void insert_addrs_from_range(const ip_range &range, std::unordered_set<uint32_t> &blacklist){
+void prefix_to_mask_insert(const prefix_ip_range &range_prefix, std::vector<ip_r> &blacklist){
 
+	struct ip_r range;
 	struct in_addr info_addr;
 
+	uint32_t mask;
+
 	//get ip range given the network addr and mask
-	uint32_t host_ip = ntohl(range.net_ip);
-	uint32_t mask = (0xFFFFFFFFu << (32 - range.prefix));
+	
+	//we check for prefix == 32 as performing the
+	//32 bits shift on 0xFFFFFFFFu is undefined behavior
+	
+	if(range_prefix.prefix == 32){
 
-	uint32_t range_start = host_ip;
-	uint32_t range_end = range_start | ~mask;
-
-	info_addr.s_addr = range.net_ip;
-	std::cout << "\r\033[K" << "Loading range " << inet_ntoa(info_addr) << "/" << range.prefix << std::endl;
-
-	//loop from first ip to last
-	for(uint32_t i = range_start; i <= range_end; i++){
-
-		progress_bar(i, range_start, range_end, 30);
-
-		//insert every ip into the unordered_set
-		blacklist.insert(htonl(i));
+		mask = 0xFFFFFFFFu;
 	}
+	else{
+
+		mask = (0xFFFFFFFFu << (32 - range_prefix.prefix));
+	}
+
+	//convert to big endian so we reduce overhead when checking
+	//the packets
+	range.big_e_mask = htonl(mask);
+	range.big_e_net_ip = range_prefix.net_ip & mask;
+
+	blacklist.push_back(range);
+
+	info_addr.s_addr = range_prefix.net_ip;
+	std::cout << "\r\033[K" << "Loaded range " << inet_ntoa(info_addr) << "/" << range_prefix.prefix << std::endl;
+
 }
 
-int parse_blacklist(std::string _blist_name, std::unordered_set<uint32_t> &_blacklist){
+int parse_blacklist(std::string _blist_name, std::vector<ip_r> &_blacklist){
 
 	std::string line;
-	std::vector<ip_range> ranges;
+	std::vector<prefix_ip_range> ranges;
 
 	int line_num = 1;
-
 	bool errors = false;
 
 	std::ifstream file_bl(_blist_name);
@@ -169,9 +180,9 @@ int parse_blacklist(std::string _blist_name, std::unordered_set<uint32_t> &_blac
 		
 	}
 
-	for(const ip_range &ip_r : ranges){
+	for(const prefix_ip_range &range : ranges){
 
-		insert_addrs_from_range(ip_r, _blacklist);
+		prefix_to_mask_insert(range, _blacklist);
 	}
 	std::cout << std::endl;
 

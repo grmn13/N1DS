@@ -1,6 +1,19 @@
 #include "packet_handler.hpp"
 #include <iostream>
 
+int find_ip(const std::vector<ip_r>* _blacklist_ptr, uint32_t addr){
+
+	for(int i = 0; i < _blacklist_ptr->size(); i++){
+
+		if(addr & (*_blacklist_ptr)[i].big_e_mask == (*_blacklist_ptr)[i].big_e_net_ip){
+
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
 void pck_handler(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* packet){
 
 	struct Context* ctx = reinterpret_cast<Context*>(args);
@@ -15,7 +28,7 @@ void pck_handler(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* p
 		eth = (struct ethhdr*)packet;
 	}
 
-	if(ctx->blacklist_ptr->count(ip->saddr)){
+	if(find_ip(ctx->blacklist_ptr, ip->saddr)){
 
 		char ip_str_buf[INET_ADDRSTRLEN] = {0};
 
@@ -27,12 +40,11 @@ void pck_handler(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* p
 			switch(ntohs(eth->h_proto)){
 
 				case ETH_P_IP:
-					log_mesg = "[ALERT] |" + Logger::timenow() + 
-						"| Blacklisted address detected on " + ctx->interface + " [" + ip_str_buf + "]\n";
+					log_mesg = "[ALERT] " + Logger::timenow() + 
+						" Blacklisted address detected on " + ctx->interface + " [" + ip_str_buf + "]\n";
 					break;
 			}
 		}
-
 	}
 	std::cout << log_mesg;
 }

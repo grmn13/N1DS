@@ -30,7 +30,7 @@ int main(int argc, char* argv[]){
 	nm.init();
 
 	//black listed ip addresses
-	std::unordered_set<uint32_t> blacklist;
+	std::vector<ip_r> blacklist;
 
 	int validate_bl = parse_blacklist(clargs.flags.blist_name.second, blacklist);
 

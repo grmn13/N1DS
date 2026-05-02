@@ -18,16 +18,22 @@
 #define FLAG_IF "-i"
 #define FLAG_BL "-b"
 
-struct ip_range{
+struct prefix_ip_range{
 
 	int prefix;
 	uint32_t net_ip;
 };
 
-//int validate_line(std::string _line, ip_range &_range);
-int validate_line_syx(std::string _line, std::vector<ip_range> &ranges_vector);
-void insert_addrs_from_range(const ip_range &range, std::unordered_set<uint32_t> &blacklist);
-int parse_blacklist(std::string _blist_name, std::unordered_set<uint32_t> &_blacklist);
+struct ip_r{
+
+	uint32_t big_e_net_ip;
+	uint32_t big_e_mask;
+};
+
+//int validate_line(std::string _line, prefix_ip_range &_range);
+int validate_line_syx(std::string _line, std::vector<prefix_ip_range> &ranges_vector);
+void insert_addrs_from_range(const prefix_ip_range &range, std::unordered_set<uint32_t> &blacklist);
+int parse_blacklist(std::string _blist_name, std::vector<ip_r> &_blacklist);
 
 
 template<typename T>
@@ -50,7 +56,6 @@ void progress_bar(T idx, T start, T end, int width){
 		else{
 			std::cout << " ";
 		}
-		//std::this_thread::sleep_for(std::chrono::milliseconds(500)); // 0.5 seconds
 	}
 	std::cout << "]" << std::flush;
 }
