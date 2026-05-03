@@ -18,7 +18,6 @@ int main(int argc, char* argv[]){
 		return 1;
 	}
 
-
 	//command line args
 	ArgParser clargs(argc, argv);
 	if(clargs.flush_err()){
@@ -50,7 +49,6 @@ int main(int argc, char* argv[]){
 	ctx.header_offset = nm.get_header_offset(linktype);
 
 	pcap_loop(nm.session, INF_PCAP_LOOP, pck_handler, (u_char*)&ctx);
-	//i need to write the callback func and the txt parser to pass both things to pcap_loop();
 
 	return 0;
 }

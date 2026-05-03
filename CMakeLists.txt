@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.10)
 # 1. Project Name
 project(NetworkIDS VERSION 1.0 LANGUAGES CXX)
 
-# 2. Set C++ Standard (C++17 is great for modern features like std::filesystem or string_view)
-set(CMAKE_CXX_STANDARD 17)
+# 2. Set C++ Standard (C++20 is great for modern features like std::filesystem or string_view)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 3. Find libpcap
