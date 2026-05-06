@@ -53,85 +53,231 @@ uint16_t RecordTracker::get_port(iphdr* ip_info){
 	return 0;
 }
 
-void RecordTracker::eval_ip_record(ip_record &ip_rec, std::array<int, LOG_IP_SIZE> &log_data){
+void ip_record::eval_ip_record(std::vector<ip_range> &_blacklist, std::array<int, LOG_IP_SIZE> &log_data){
 
-	uint32_t dst_ip = ip_rec.dst_ip;
-	uint16_t dst_port = ip_rec.dst_port;
+	//use this static values to not fill the logs once
+	//it has been logged that a scan or flood attack is happening
+	static int flood_tracker = 0;
+	static int flood_alert = 0;
+	static int vscan_alert = 0;
+	static int hscan_alert = 0;
 
-	int vscan_count = ip_rec.dst_record[dst_ip][dst_port];
-	int hscan_count = ip_rec.ports_record[dst_port][dst_ip];
+	int vscan_count = dst_record[dst_ip].size();
+	int hscan_count = ports_record[dst_port].size();
 
-	bool flood_proto = (ip_rec.proto == UDP || ip_rec.proto == ICMP);
+	bool flood_proto = (proto == UDP || proto == ICMP);
 
 	//blackisted ip
-	if(find_ip(blacklist, ip_rec.ip)){
+	if(find_ip(_blacklist, ip)){
 
 		log_data[LOG_BLK_ADDR] = ALERT;
 	}
+	else{
+		log_data[LOG_BLK_ADDR] = NONE;
+	}
 
 	//vertical scan
-	if(vscan_count > MAX_VSCAN_CRI){
+	if(vscan_count > MAX_VSCAN_CRI && vscan_alert < 3){
 
 		log_data[LOG_IP_VSCAN] = CRITICAL;
+		vscan_alert = 3;
 	}
-	else if(vscan_count > MAX_VSCAN_ALR){
+	else if(vscan_count > MAX_VSCAN_ALR && vscan_alert < 2){
 
 		log_data[LOG_IP_VSCAN] = ALERT;
+		vscan_alert = 2;
 	}
-	else if(vscan_count > MAX_VSCAN_NOT){
+	else if(vscan_count > MAX_VSCAN_NOT && vscan_alert < 1){
 
 		log_data[LOG_IP_VSCAN] = NOTICE;
+		vscan_alert = 1;
 	}
 	else{
 
 		log_data[LOG_IP_VSCAN] = NONE;
+		vscan_alert = 0;
 	}
 
 	//horizontal scan
-	if(hscan_count > MAX_HSCAN_CRI){
+	if(hscan_count > MAX_HSCAN_CRI && hscan_alert < 3){
 
 		log_data[LOG_IP_HSCAN] = CRITICAL;
+		hscan_alert = 3;
 	}
-	else if(hscan_count > MAX_HSCAN_ALR){
+	else if(hscan_count > MAX_HSCAN_ALR && hscan_alert < 2){
 
 		log_data[LOG_IP_HSCAN] = ALERT;
+		hscan_alert = 2;
 	}
-	else if(hscan_count > MAX_HSCAN_NOT){
+	else if(hscan_count > MAX_HSCAN_NOT && hscan_alert < 1){
 
 		log_data[LOG_IP_HSCAN] = NOTICE;
+		hscan_alert = 1;
+
 	}
 	else{
 
 		log_data[LOG_IP_HSCAN] = NONE;
+		hscan_alert = 0;
 	}
 
 	//flood attack
-	if(!ip_rec.fld_notice && ip_rec.flood_tracker > MAX_FLOOD_NOT && flood_proto){
+	if(flood_tracker > MAX_FLOOD_CRI && flood_proto && flood_alert < 3){
+
+		log_data[LOG_FLOOD_AT] = CRITICAL;
+		flood_alert = 2;
+		flood_tracker = 0;
+
+		//i reset the package counter but set the alert
+		//flag to 2 so if the log stays on the tracked
+		//it will only notify again after another MAX_FLOOD_CRI
+		//amount of packages
+	}
+	else if(flood_tracker > MAX_FLOOD_ALR && flood_proto && flood_alert < 2){
+
+		log_data[LOG_FLOOD_AT] = ALERT;
+		flood_alert = 2;
+	}
+	else if(flood_tracker > MAX_FLOOD_NOT && flood_proto && flood_alert < 1){
 
 		log_data[LOG_FLOOD_AT] = NOTICE;
-		ip_rec.fld_notice = true;
-	}
-	else if(!ip_rec.fld_alert && ip_rec.flood_tracker > MAX_FLOOD_ALR && flood_proto){
-
-		log_data[LOG_FLOOD_AT] = ALERT;
-		ip_rec.fld_alert = true;
-	}
-	else if(ip_rec.flood_tracker > MAX_FLOOD_ALR && flood_proto){
-
-		log_data[LOG_FLOOD_AT] = ALERT;
-		ip_rec.flood_tracker = 0;
+		flood_alert = 1;
 	}
 	else{
 		log_data[LOG_FLOOD_AT] = NONE;
 	}
+
+	flood_tracker += 1;
 };
 
-void log_info(){
+std::string_view ip_record::get_mesg(int log_code){
 
+	switch(log_code){
+
+		case LOG_BLK_ADDR: return " BLACKLISTED ADDR ";
+		case LOG_IP_VSCAN: return " VSCAN DETECTED ";
+		case LOG_IP_HSCAN: return " HSCAN DETECTED ";
+		case LOG_FLOOD_AT: return " FLOOD DETECTED ";
+	}
+
+	return " UNKNOWN LOG CODE ";
+}
+
+std::string ip_record::build_log(int log_code, sv log_level, sv _msg_str, sv _src_str, sv _dst_str, sv _proto_str, int flood_count){
+
+	std::stringstream log;
+
+	switch(log_code){
+
+		case LOG_BLK_ADDR:
+
+			log << "\n" << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
+			" SRC: " << _src_str << " DST: " << _dst_str << " PROTO: " << _proto_str <<
+			" DPORT: " << ntohs(dst_port);
+			break;
+
+		case LOG_IP_VSCAN:
+
+			log << "\n" << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
+			" SRC: " << _src_str << " DST: " << _dst_str << " PROTO: " << _proto_str <<
+			" ON " << dst_record[dst_ip].size() << " PORTS";
+			break;
+
+		case LOG_IP_HSCAN:
+
+			log << "\n" << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
+			" SRC: " << _src_str << " DST: " << _dst_str << " PROTO: " << _proto_str <<
+			" ON PORT " << ntohs(dst_port) << " TO " << ports_record[dst_port].size() << " ADDRESSES";
+			break;
+
+		case LOG_FLOOD_AT:
+
+			log << "\n" << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
+			" SRC: " << _src_str << " DST: " << _dst_str << " PROTO: " << _proto_str <<
+			" DPORT: " << ntohs(dst_port) << " PCK RECIEVED " << flood_tracker_total;
+			break;
+
+	}
+
+	return log.str();
+}
+
+
+void ip_record::log_ip_record(const std::array<int, LOG_IP_SIZE> &log_data){
+
+					//maybe i have to cast this to int
+	std::string proto_str = find_proto(proto);
+
+	char s_ip_str_buf[INET_ADDRSTRLEN];
+	char d_ip_str_buf[INET_ADDRSTRLEN];
+
+	//pass to human readable (presentation)
+	inet_ntop(AF_INET, &ip, s_ip_str_buf, INET_ADDRSTRLEN);
+	inet_ntop(AF_INET, &dst_ip, d_ip_str_buf, INET_ADDRSTRLEN);
+
+	//buffer for formatted presentaton ip/msg
+	char src_str[32];
+	char dst_str[32];
+	char msg_str[64];
+
+	//format it to a fixed size
+	snprintf(src_str, sizeof(src_str), "%-15s", s_ip_str_buf);
+	snprintf(dst_str, sizeof(dst_str), "%-15s", d_ip_str_buf);
+
+	//i include none just so i dont have to do index + 1 and make it less confusing
+	std::array<std::string, 4> log_levels = {"NONE", "NOTICE", "ALERT", "CRITICAL"};
+
+	std::vector<std::string> log_mesgs;
+
+	//i have to create this so the string returned from
+	//get_mesg() is not temporary and when it gets converted into
+	//a c-style string in snprintf() doesnt point to garbage
+	std::string temp_msg;
+
+	int log_code;
+
+
+	if(log_data[LOG_BLK_ADDR]){
+
+		log_code = LOG_BLK_ADDR;
+		temp_msg = get_mesg(LOG_BLK_ADDR);
+		snprintf(msg_str, sizeof(msg_str), "%-15s", temp_msg);
+
+		log_mesgs.push_back(build_log(log_code, log_levels[log_data[log_code]], temp_msg.c_str(), src_str, dst_str, proto_str));
+	}
+	if(log_data[LOG_IP_VSCAN]){
+
+		log_code = LOG_IP_VSCAN;
+		temp_msg = get_mesg(LOG_IP_VSCAN);
+		snprintf(msg_str, sizeof(msg_str), "%-15s", temp_msg);
+
+		log_mesgs.push_back(build_log(log_code, log_levels[log_data[log_code]], temp_msg.c_str(), src_str, dst_str, proto_str));
+	}
+	if(log_data[LOG_IP_HSCAN]){
+
+		log_code = LOG_IP_HSCAN;
+		temp_msg = get_mesg(LOG_IP_HSCAN);
+		snprintf(msg_str, sizeof(msg_str), "%-15s", temp_msg);
+
+		log_mesgs.push_back(build_log(log_code, log_levels[log_data[log_code]], temp_msg.c_str(), src_str, dst_str, proto_str));
+	}
+	if(log_data[LOG_FLOOD_AT]){
+
+		log_code = LOG_FLOOD_AT;
+		temp_msg = get_mesg(LOG_FLOOD_AT);
+		snprintf(msg_str, sizeof(msg_str), "%-15s", temp_msg);
+
+		log_mesgs.push_back(build_log(log_code, log_levels[log_data[log_code]], temp_msg.c_str(), src_str, dst_str, proto_str, flood_tracker_total));
+	}
+
+	for(auto log : log_mesgs){
+
+		std::cout << log;
+	}
 
 };
 
-void RecordTracker::insert_record(iphdr* ip_info){
+ip_record& RecordTracker::insert_record(iphdr* ip_info){
 
 	//map iterator pointing to the list iterator that points to the ip
 	auto map_it = r_map.find(ip_info->saddr);
@@ -143,31 +289,33 @@ void RecordTracker::insert_record(iphdr* ip_info){
 	if(map_it != r_map.end()){
 
 		//list iterator pointing to the ip
-		auto ip_r_ptr = map_it->second;
+		auto ip_rec = map_it->second;
 
 		//move node to the end of the list
-		records.splice(records.end(), records, map_it->second);
+		records.splice(records.end(), records, ip_rec);
 
-		ip_r_ptr->dst_ip = s_addr;
-		ip_r_ptr->dst_port = port;
-		ip_r_ptr->proto = ip_info->protocol;
+		ip_rec->dst_ip = s_addr;
+		ip_rec->dst_port = port;
+		ip_rec->proto = ip_info->protocol;
 
-		ip_r_ptr->flood_tracker += 1;
+		ip_rec->flood_tracker_total += 1;
 
 		//check for size of the internal maps to protect against
 		//flood-type attacks / scanns filling up memory without
 		//increasing records.size()
-		if(ip_r_ptr->dst_record[d_addr][port] < MAX_MAP_SIZE){
+		if(ip_rec->dst_record[d_addr][port] < MAX_MAP_SIZE){
 
-			ip_r_ptr->dst_record[d_addr][port] += 1;
+			ip_rec->dst_record[d_addr][port] += 1;
 		}
 
-		if(ip_r_ptr->ports_record[port][d_addr] < MAX_MAP_SIZE){
+		if(ip_rec->ports_record[port][d_addr] < MAX_MAP_SIZE){
 
-			ip_r_ptr->ports_record[port][d_addr] += 1;
+			ip_rec->ports_record[port][d_addr] += 1;
 		}
 
-		ip_r_ptr->last_seen = std::chrono::steady_clock::now();
+		ip_rec->last_seen = std::chrono::steady_clock::now();
+
+		return *ip_rec;
 	}
 	else{
 
@@ -179,9 +327,7 @@ void RecordTracker::insert_record(iphdr* ip_info){
 		ip_r.dst_port = port;
 		ip_r.proto = ip_info->protocol;
 
-		ip_r.flood_tracker = 1;
-		ip_r.fld_notice = false;
-		ip_r.fld_alert = false;
+		ip_r.flood_tracker_total = 0;
 
 		ip_r.dst_record[d_addr][port] += 1;
 		ip_r.ports_record[port][d_addr] += 1;
@@ -190,9 +336,13 @@ void RecordTracker::insert_record(iphdr* ip_info){
 
 		//insert on the tracker data structures
 		records.push_back(ip_r);
-		r_map[ip_r.ip] = --records.end();
+
+		auto new_iterator = --records.end();
+		r_map[ip_r.ip] = new_iterator;
 
 		rec_size += 1;
+
+		return *new_iterator;
 	}
 
 }
@@ -228,6 +378,7 @@ void RecordTracker::update_records(){
 		time_last_cleanup = time_now;
 		packet_counter = 0;
 	}
+
 }
 
 //i use initializer list because references cant be reassigned
@@ -253,78 +404,24 @@ void callback(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* pack
 		}
 	}
 
-	struct iphdr* ip = (struct iphdr*)(packet + ctx->header_offset);
+	//if this is ipv4
+	if(eth && ntohs(eth->h_proto) == ETH_P_IP){
 
-	std::stringstream log_mesg;
+		struct iphdr* ip = (struct iphdr*)(packet + ctx->header_offset);
 
-	std::string protocol = find_proto((int)ip->protocol);
+		std::stringstream log_mesg;
 
-	//i think idc if it is ehternet at this point but maybe
-	//im wrong and this crashes something
-	ctx->r_track_ptr->insert_record(ip);
-	ctx->r_track_ptr->update_records(); //internaly checks if it actually has to update the records
-/*
-	int tempcount = 0;
-	for(auto record : ctx->r_track_ptr->records){
+		std::string protocol = find_proto((int)ip->protocol);
 
-		auto time_now = std::chrono::steady_clock::now();
-		auto duration = time_now - record.last_seen;
-		auto elapsed_sec = std::chrono::duration_cast<std::chrono::seconds>(duration);
+		std::array<int, LOG_IP_SIZE> log_data;
 
-		struct in_addr addr;
-		addr.s_addr = record.ip;
+		//i think idc if it is ehternet at this point but maybe
+		//im wrong and this crashes something
+		ip_record &ip_rec = ctx->r_track_ptr->insert_record(ip);
 
-		std::cout << "Entry " << tempcount++ << std::endl;
-		std::cout << "    " << inet_ntoa(addr) << std::endl;
-		std::cout << "    " << find_proto((int)record.proto) << std::endl;
-		std::cout << "    " << "sec: " << std::chrono::duration<double>(elapsed_sec).count() << std::endl;
-		std::cout << "    " << "records size -> " << ctx->r_track_ptr->records.size();
-		std::cout << std::endl;
+		ip_rec.eval_ip_record(ctx->r_track_ptr->blacklist, log_data);
+		ip_rec.log_ip_record(log_data);
+		ctx->r_track_ptr->update_records(); //internaly checks if it actually has to update the records
 	}
-	/*
-	if(find_ip(ctx->blacklist_ptr, ip->saddr)){
 
-		char s_ip_str[INET_ADDRSTRLEN] = {0};
-		char d_ip_str[INET_ADDRSTRLEN] = {0};
-
-		//parse it to human readable format
-		inet_ntop(AF_INET, &(ip->saddr), s_ip_str, INET_ADDRSTRLEN);
-		inet_ntop(AF_INET, &(ip->daddr), d_ip_str, INET_ADDRSTRLEN);
-
-		char src[32];
-		char dst[32];
-
-		snprintf(src, sizeof(src), "%-15s", s_ip_str);
-		snprintf(dst, sizeof(dst), "%-15s", d_ip_str);
-
-		if(eth != nullptr){
-
-			switch(ntohs(eth->h_proto)){
-
-				case ETH_P_IP:
-
-					
-					log_mesg << "[ALERT] " + Logger::timenow() << " " << ctx->interface << " BLACKLISTED SRC: "
-						<< src << " DST: " << dst << " PROTO: " << protocol << "\n";
-					
-					break;
-				
-				case ETH_P_ARP:
-
-					break;
-
-				case ETH_P_8021Q:
-					
-					break;
-
-			}
-		}
-		else{
-			log_mesg << "[ALERT] " + Logger::timenow() << " " << ctx->interface << " BLACKLISTED SRC: "
-				<< src << " DST: " << dst << " PROTO: " << protocol << " TUNNELED\n";
-
-		}
-	}
-	*/
-	std::cout << log_mesg.str();
 }

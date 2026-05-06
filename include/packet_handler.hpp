@@ -7,6 +7,7 @@
 #include <utility>
 #include <list>
 #include <array>
+#include <string_view>
 #include <unordered_map>
 #include <chrono>
 #include <netinet/tcp.h>
@@ -40,11 +41,12 @@
 #define LOG_ARP_SCAN 4 //arp scan
 #define LOG_ARP_POIS 5 //arp poisoning
 #define LOG_ARP_SIZE
+
 //log level
 #define NONE 0
-#define NOTICE 3
+#define NOTICE 1
 #define ALERT 2
-#define CRITICAL 1
+#define CRITICAL 3
 
 //protocols
 #define ICMP 1
@@ -77,9 +79,7 @@ struct ip_record{
 	uint16_t dst_port;
 	uint8_t proto;
 
-	int flood_tracker;
-	bool fld_notice;
-	bool fld_alert;
+	int flood_tracker_total;
 
 	                  //ip                           //port    //count
 	std::unordered_map<uint32_t, std::unordered_map<uint16_t, int>> dst_record;
@@ -87,6 +87,13 @@ struct ip_record{
 	std::unordered_map<uint16_t, std::unordered_map<uint32_t, int>> ports_record;
 	
 	std::chrono::steady_clock::time_point last_seen;
+
+	void eval_ip_record(std::vector<ip_range> &_blacklist, std::array<int, LOG_IP_SIZE> &log_data);
+	void log_ip_record(const std::array<int, LOG_IP_SIZE> &log_data);
+	std::string_view get_mesg(int log_code);
+
+	using sv = std::string_view;
+	std::string build_log(int log_code, sv log_level, sv _msg_str, sv _src_str, sv _dst_str, sv _proto_str, int flood_count = 0);
 };
 
 struct arp_record{
@@ -108,7 +115,9 @@ class RecordTracker{
 	std::ofstream &logf;
 	std::vector<ip_range> &blacklist;
 
-	void insert_record(iphdr* ip_info);
+	ip_record& insert_record(iphdr* ip_info);
+
+	void log_arp_info();
 	void update_records();
 
 	int records_size();
@@ -118,9 +127,6 @@ class RecordTracker{
 	private:
 
 	uint16_t get_port(iphdr* ip_info);
-
-	void eval_ip_record(ip_record &ip_rec, std::array<int, LOG_IP_SIZE> &log_data);
-	void log_info();
 
 	std::list<ip_record> records;
 	std::unordered_map<uint32_t, std::list<ip_record>::iterator> r_map;
