@@ -20,27 +20,25 @@
 #define MAX_MAP_SIZE 500
 
 #define MAX_VSCAN_NOT 20
-#define MAX_VSCAN_ALR 40
-#define MAX_VSCAN_CRI 80
+#define MAX_VSCAN_ALR 50
+#define MAX_VSCAN_CRI 200
 
-#define MAX_HSCAN_NOT 10
-#define MAX_HSCAN_ALR 20
-#define MAX_HSCAN_CRI 50
+#define MAX_HSCAN_NOT 35
+#define MAX_HSCAN_ALR 50
+#define MAX_HSCAN_CRI 80
 
-#define MAX_FLOOD_NOT 1000
-#define MAX_FLOOD_ALR 4000
-#define MAX_FLOOD_CRI 8000
+#define MAX_FLOOD_NOT 2000
+#define MAX_FLOOD_ALR 5000
+#define MAX_FLOOD_CRI 10000
 
 //IP log codes
 #define LOG_BLK_ADDR 0 //blacklisted addrs
 #define LOG_IP_VSCAN 1 //ip vertical scan
 #define LOG_IP_HSCAN 2 //ip horizontal scan
-#define LOG_FLOOD_AT 3 //flood-DoS attack
-#define LOG_IP_SIZE 4
-
-#define LOG_ARP_SCAN 4 //arp scan
-#define LOG_ARP_POIS 5 //arp poisoning
-#define LOG_ARP_SIZE
+#define LOG_FLOOD_SYN 3 //syn-flood
+#define LOG_FLOOD_SACK 4 //syn-ack-flood
+#define LOG_FLOOD_UNV 5 //not verified flood
+#define LOG_IP_SIZE 6
 
 //log level
 #define NONE 0
@@ -104,9 +102,32 @@ struct ip_record{
 
 	using sv = std::string_view;
 	std::string build_log(int log_code, sv log_level, sv _msg_str, sv _src_str, sv _dst_str, sv _proto_str, int flood_count = 0);
-};
 
-struct arp_record{
+	private:
+
+	bool syn_flood_not = false;
+	bool syn_flood_alr = false;
+	bool syn_flood_cri = false;
+
+	bool syn_ack_flood_not = false;
+	bool syn_ack_flood_alr = false;
+	bool syn_ack_flood_cri = false;
+
+	bool unv_flood_not = false;
+	bool unv_flood_alr = false;
+	bool unv_flood_cri = false;
+
+	bool vscan_not = false;
+	bool vscan_alr = false;
+	bool vscan_cri = false;
+
+	bool hscan_not = false;
+	bool hscan_alr = false;
+	bool hscan_cri = false;
+
+	int last_vscan_log = 0;
+	int last_hscan_log = 0;
+
 
 };
 

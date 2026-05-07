@@ -15,8 +15,9 @@
 #include <thread>
 #include <chrono>
 
-#define FLAG_IF "-i"
-#define FLAG_BL "-b"
+#define FLAG_IF "-i" // interface
+#define FLAG_BL "-b" // blacklist
+#define FLAG_CT "-t" // connection table
 
 struct prefix_ip_range{
 

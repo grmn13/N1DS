@@ -252,6 +252,7 @@ ArgParser::ArgParser(int argc, char* argv[]){
 				req_flags_rem--;
 			}
 		}
+		//blacklist
 		else if(strcmp(argv[idx], FLAG_BL) == 0){
 
 			if(verifyFlag(idx, argc, "option -b required an argument: \'-b <blacklist-path>\'") == 0){

@@ -36,18 +36,8 @@ int RecordTracker::records_size(){
 //maybe not need tcphdr and udphdr here
 void ip_record::eval_ip_record(std::vector<ip_range> &_blacklist, std::array<int, LOG_IP_SIZE> &log_data, tcphdr* tcp_info, udphdr* udp_info){
 
-	//use this static values to not fill the logs once
-	//it has been logged that a scan or flood attack is happening
-	static int syn_flood_alert = 0;
-	static int syn_ack_flood_alert = 0;
-	static int unv_flood_alert = 0;
-	static int vscan_alert = 0;
-	static int hscan_alert = 0;
-
 	int vscan_count = dst_record[dst_ip].size();
 	int hscan_count = ports_record[dst_port].size();
-
-	bool flood_proto = (proto == UDP || proto == ICMP);
 
 	//blackisted ip
 	if(find_ip(_blacklist, ip)){
@@ -59,117 +49,114 @@ void ip_record::eval_ip_record(std::vector<ip_range> &_blacklist, std::array<int
 	}
 
 	//vertical scan
-	if(vscan_count > MAX_VSCAN_CRI && vscan_alert < 3){
+	if((vscan_count > MAX_VSCAN_CRI && vscan_cri == false) || ((vscan_count - last_vscan_log) > MAX_VSCAN_CRI)){
 
 		log_data[LOG_IP_VSCAN] = CRITICAL;
-		vscan_alert = 3;
+		vscan_cri = true;
+		last_vscan_log = vscan_count;
 	}
-	else if(vscan_count > MAX_VSCAN_ALR && vscan_alert < 2){
+	else if(vscan_count > MAX_VSCAN_ALR && vscan_alr == false){
 
 		log_data[LOG_IP_VSCAN] = ALERT;
-		vscan_alert = 2;
+		vscan_alr = true;
 	}
-	else if(vscan_count > MAX_VSCAN_NOT && vscan_alert < 1){
+	else if(vscan_count > MAX_VSCAN_NOT && vscan_not == false){
 
 		log_data[LOG_IP_VSCAN] = NOTICE;
-		vscan_alert = 1;
+		vscan_not = true;
 	}
 	else{
 
 		log_data[LOG_IP_VSCAN] = NONE;
-		vscan_alert = 0;
 	}
 
 	//horizontal scan
-	if(hscan_count > MAX_HSCAN_CRI && hscan_alert < 3){
+	if((hscan_count > MAX_HSCAN_CRI && hscan_cri == false) || ((hscan_count - last_hscan_log) > MAX_HSCAN_CRI)){
 
 		log_data[LOG_IP_HSCAN] = CRITICAL;
-		hscan_alert = 3;
+		hscan_cri = true;
+		last_hscan_log = hscan_count;
 	}
-	else if(hscan_count > MAX_HSCAN_ALR && hscan_alert < 2){
+	else if(hscan_count > MAX_HSCAN_ALR && hscan_alr == false){
 
 		log_data[LOG_IP_HSCAN] = ALERT;
-		hscan_alert = 2;
+		hscan_alr = true;
 	}
-	else if(hscan_count > MAX_HSCAN_NOT && hscan_alert < 1){
+	else if(hscan_count > MAX_HSCAN_NOT && hscan_not == false){
 
 		log_data[LOG_IP_HSCAN] = NOTICE;
-		hscan_alert = 1;
-
+		hscan_not = true;
 	}
-	else{
+	else if(hscan_count < MAX_HSCAN_NOT){
 
 		log_data[LOG_IP_HSCAN] = NONE;
-		hscan_alert = 0;
 	}
 
 	//SYN flood attack
-	if(syn_count > MAX_FLOOD_CRI && flood_proto && syn_flood_alert < 3){
+	if(syn_count > MAX_FLOOD_CRI && syn_flood_cri == false){
 
-		log_data[LOG_FLOOD_AT] = CRITICAL;
-		syn_flood_alert = 2;
-		syn_count = 0;
+		log_data[LOG_FLOOD_SYN] = CRITICAL;
+		syn_flood_cri = true;
 
 		//i reset the package counter but set the alert
 		//flag to 2 so if the log stays on the tracked
 		//it will only notify again after another MAX_FLOOD_CRI
 		//amount of packages
 	}
-	else if(syn_count > MAX_FLOOD_ALR && flood_proto && syn_flood_alert < 2){
+	else if(syn_count > MAX_FLOOD_ALR && syn_flood_alr == false){
 
-		log_data[LOG_FLOOD_AT] = ALERT;
-		syn_flood_alert = 2;
+		log_data[LOG_FLOOD_SYN] = ALERT;
+		syn_flood_alr = true;
 	}
-	else if(syn_count > MAX_FLOOD_NOT && flood_proto && syn_flood_alert < 1){
+	else if(syn_count > MAX_FLOOD_NOT && syn_flood_not == false){
 
-		log_data[LOG_FLOOD_AT] = NOTICE;
-		syn_flood_alert = 1;
+		log_data[LOG_FLOOD_SYN] = NOTICE;
+		syn_flood_not = true;
 	}
 	else{
-		log_data[LOG_FLOOD_AT] = NONE;
+		log_data[LOG_FLOOD_SYN] = NONE;
 	}
 
 	//SYN+ACK flood attack
-	if(syn_ack_count > MAX_FLOOD_CRI && flood_proto && syn_ack_flood_alert < 3){
+	if(syn_ack_count > MAX_FLOOD_CRI && syn_ack_flood_cri == false){
 
-		log_data[LOG_FLOOD_AT] = CRITICAL;
-		syn_ack_flood_alert = 2;
-		syn_ack_count = 0;
+		log_data[LOG_FLOOD_SACK] = CRITICAL;
+		syn_ack_flood_cri = true;
 	}
-	else if(syn_ack_count > MAX_FLOOD_ALR && flood_proto && syn_ack_flood_alert < 2){
+	else if(syn_ack_count > MAX_FLOOD_ALR && syn_ack_flood_alr == false){
 
-		log_data[LOG_FLOOD_AT] = ALERT;
-		syn_ack_flood_alert = 2;
+		log_data[LOG_FLOOD_SACK] = ALERT;
+		syn_ack_flood_alr = true;
 	}
-	else if(syn_ack_count > MAX_FLOOD_NOT && flood_proto && syn_ack_flood_alert < 1){
+	else if(syn_ack_count > MAX_FLOOD_NOT && syn_ack_flood_not == false){
 
-		log_data[LOG_FLOOD_AT] = NOTICE;
-		syn_ack_flood_alert = 1;
+		log_data[LOG_FLOOD_SACK] = NOTICE;
+		syn_ack_flood_not = true;
 	}
 	else{
-		log_data[LOG_FLOOD_AT] = NONE;
+		log_data[LOG_FLOOD_SACK] = NONE;
 	}
 
 	//UNVERIFIED flood attack
-	if(unv_count > MAX_FLOOD_CRI && flood_proto && unv_flood_alert < 3){
+	if(unv_count > MAX_FLOOD_CRI && unv_flood_cri == false){
 
-		log_data[LOG_FLOOD_AT] = CRITICAL;
-		unv_flood_alert = 2;
-		unv_count = 0;
+		log_data[LOG_FLOOD_UNV] = CRITICAL;
+		unv_flood_cri = true;
 	}
-	else if(unv_count > MAX_FLOOD_ALR && flood_proto && unv_flood_alert < 2){
+	else if(unv_count > MAX_FLOOD_ALR && unv_flood_alr == false){
 
-		log_data[LOG_FLOOD_AT] = ALERT;
-		unv_flood_alert = 2;
+		log_data[LOG_FLOOD_UNV] = ALERT;
+		unv_flood_alr = true;
 	}
-	else if(unv_count > MAX_FLOOD_NOT && flood_proto && unv_flood_alert < 1){
+	else if(unv_count > MAX_FLOOD_NOT && unv_flood_not == false){
 
-		log_data[LOG_FLOOD_AT] = NOTICE;
-		unv_flood_alert = 1;
+		log_data[LOG_FLOOD_UNV] = NOTICE;
+		unv_flood_not = true;
 	}
 	else{
-		log_data[LOG_FLOOD_AT] = NONE;
+		log_data[LOG_FLOOD_UNV] = NONE;
 	}
+
 };
 
 std::string_view ip_record::get_mesg(int log_code){
@@ -179,7 +166,9 @@ std::string_view ip_record::get_mesg(int log_code){
 		case LOG_BLK_ADDR: return " BLACKLISTED ADDR ";
 		case LOG_IP_VSCAN: return " VSCAN DETECTED ";
 		case LOG_IP_HSCAN: return " HSCAN DETECTED ";
-		case LOG_FLOOD_AT: return " FLOOD DETECTED ";
+		case LOG_FLOOD_SYN: return " SYN FLOOD DETECTED ";
+		case LOG_FLOOD_SACK: return " SYN-ACK FLOOD DETECTED";
+		case LOG_FLOOD_UNV: return " UNVERIFIED FLOOD DETECTED";
 	}
 
 	return " UNKNOWN LOG CODE ";
@@ -193,30 +182,32 @@ std::string ip_record::build_log(int log_code, sv log_level, sv _msg_str, sv _sr
 
 		case LOG_BLK_ADDR:
 
-			log << "\n" << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
-			" SRC: " << _src_str << " DST: " << _dst_str << " PROTO: " << _proto_str <<
-			" DPORT: " << ntohs(dst_port);
+			log << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
+			" SRC: " << _src_str << " DST: " << _dst_str << " " << _proto_str <<
+			" DPORT: " << ntohs(dst_port) << "\n" ;
 			break;
 
 		case LOG_IP_VSCAN:
 
-			log << "\n" << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
-			" SRC: " << _src_str << " DST: " << _dst_str << " PROTO: " << _proto_str <<
-			" DPORT: " << ntohs(dst_port) << " ON " << dst_record[dst_ip].size() << " PORTS";
+			log << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
+			" SRC: " << _src_str << " DST: " << _dst_str << " " << _proto_str <<
+			" DPORT: " << ntohs(dst_port) << " ON " << dst_record[dst_ip].size() << " (observed)PORTS" << "\n" ;
 			break;
 
 		case LOG_IP_HSCAN:
 
-			log << "\n" << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
-			" SRC: " << _src_str << " DST: " << _dst_str << " PROTO: " << _proto_str <<
-			" ON PORT " << ntohs(dst_port) << " TO " << ports_record[dst_port].size() << " ADDRESSES";
+			log << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
+			" SRC: " << _src_str << " DST: " << _dst_str << " " << _proto_str <<
+			" ON PORT " << ntohs(dst_port) << " TO " << ports_record[dst_port].size() << " ADDRESSES" << "\n" ;
 			break;
 
-		case LOG_FLOOD_AT:
+		case LOG_FLOOD_SYN:
+		case LOG_FLOOD_SACK:
+		case LOG_FLOOD_UNV:
 
-			log << "\n" << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
-			" SRC: " << _src_str << " DST: " << _dst_str << " PROTO: " << _proto_str <<
-			" DPORT: " << ntohs(dst_port) << " PCK RECIEVED " << flood_count;
+			log << "[" << log_level << "] " << Logger::timenow() << _msg_str <<
+			" SRC: " << _src_str << " DST: " << _dst_str << " " << _proto_str <<
+			" DPORT: " << ntohs(dst_port) << " PCK RECIEVED " << flood_count << "\n" ;
 			break;
 
 	}
@@ -235,19 +226,19 @@ void RecordTracker::print_conn_table(){
 	char src_str[32];
 	char dst_str[32];
 
+	std::cout << "\033[2J\033[H";
+	std::cout << src_str << " CONN TABLE: " << std::endl;
 	for(auto src : conn_table){
 
 		inet_ntop(AF_INET, &src.first, s_ip_str_buf, INET_ADDRSTRLEN);
 		snprintf(src_str, sizeof(src_str), "%-15s", s_ip_str_buf);
-
-		std::cout << src_str << " connections: " << std::endl;
 
 		for(auto dst : src.second){
 
 			inet_ntop(AF_INET, &dst.first, d_ip_str_buf, INET_ADDRSTRLEN);
 			snprintf(dst_str, sizeof(dst_str), "%-15s", d_ip_str_buf);
 
-			std::cout << "\n" << "    " << dst_str << " -- state -> " << status_str[static_cast<int>(dst.second)];
+			std::cout << "\n" << "    " << src_str << " --> " << dst_str << " " << status_str[static_cast<int>(dst.second)];
 		}
 
 		std::cout << std::endl << std::endl;
@@ -257,7 +248,6 @@ void RecordTracker::print_conn_table(){
 
 void ip_record::log_ip_record(const std::array<int, LOG_IP_SIZE> &log_data){
 
-					//maybe i have to cast this to int
 	std::string proto_str = find_proto(proto);
 
 	char s_ip_str_buf[INET_ADDRSTRLEN];
@@ -288,14 +278,13 @@ void ip_record::log_ip_record(const std::array<int, LOG_IP_SIZE> &log_data){
 
 	int log_code;
 
-
 	if(log_data[LOG_BLK_ADDR]){
 
 		log_code = LOG_BLK_ADDR;
 		temp_msg = get_mesg(LOG_BLK_ADDR);
 		snprintf(msg_str, sizeof(msg_str), "%-15s", temp_msg);
 
-		//aqui ya esta mal TODO
+		//aqui ya esta mal //TODO //no se que mierda es este comentario
 		log_mesgs.push_back(build_log(log_code, log_levels[log_data[log_code]], temp_msg.c_str(), src_str, dst_str, proto_str));
 	}
 	if(log_data[LOG_IP_VSCAN]){
@@ -314,17 +303,29 @@ void ip_record::log_ip_record(const std::array<int, LOG_IP_SIZE> &log_data){
 
 		log_mesgs.push_back(build_log(log_code, log_levels[log_data[log_code]], temp_msg.c_str(), src_str, dst_str, proto_str));
 	}
-	if(log_data[LOG_FLOOD_AT]){
+	if(log_data[LOG_FLOOD_SYN]){
 
-		log_code = LOG_FLOOD_AT;
-		temp_msg = get_mesg(LOG_FLOOD_AT);
+		log_code = LOG_FLOOD_SYN;
+		temp_msg = get_mesg(LOG_FLOOD_SYN);
 		snprintf(msg_str, sizeof(msg_str), "%-15s", temp_msg);
 
-		//VERY IMPORTANT
-		//i have to create new entries on this if statement
-		//to account for different flood types of attacks as
-		//now im sending the flood counter as SYN
 		log_mesgs.push_back(build_log(log_code, log_levels[log_data[log_code]], temp_msg.c_str(), src_str, dst_str, proto_str, syn_count));
+	}
+	if(log_data[LOG_FLOOD_SACK]){
+
+		log_code = LOG_FLOOD_SACK;
+		temp_msg = get_mesg(LOG_FLOOD_SACK);
+		snprintf(msg_str, sizeof(msg_str), "%-15s", temp_msg);
+
+		log_mesgs.push_back(build_log(log_code, log_levels[log_data[log_code]], temp_msg.c_str(), src_str, dst_str, proto_str, syn_ack_count));
+	}
+	if(log_data[LOG_FLOOD_UNV]){
+
+		log_code = LOG_FLOOD_UNV;
+		temp_msg = get_mesg(LOG_FLOOD_UNV);
+		snprintf(msg_str, sizeof(msg_str), "%-15s", temp_msg);
+
+		log_mesgs.push_back(build_log(log_code, log_levels[log_data[log_code]], temp_msg.c_str(), src_str, dst_str, proto_str, unv_count));
 	}
 
 	for(auto log : log_mesgs){
@@ -412,11 +413,9 @@ ip_record& RecordTracker::insert_record(iphdr* ip_info, tcphdr* tcp_info, udphdr
 		ip_r.dst_port = port;
 		ip_r.proto = ip_info->protocol;
 
-		//do i initialize this as 0 ?
 		ip_r.syn_count = 0;
 		ip_r.unv_count = 0;
 		ip_r.syn_ack_count = 0;
-		//ip_r.flood_tracker_total = 0;
 
 		ip_r.dst_record[d_addr].insert(port);
 		ip_r.ports_record[port].insert(d_addr);
@@ -616,8 +615,8 @@ void callback(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* pack
 		ip_record &ip_rec = ctx->r_track_ptr->insert_record(ip, tcp, udp);
 
 		ip_rec.eval_ip_record(ctx->r_track_ptr->blacklist, log_data, tcp, udp);
-		//ip_rec.log_ip_record(log_data);
-		ctx->r_track_ptr->print_conn_table();
+		ip_rec.log_ip_record(log_data);
+		//ctx->r_track_ptr->print_conn_table();
 		ctx->r_track_ptr->update_records(); //internaly checks if it actually has to update the records
 	}
 
