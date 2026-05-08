@@ -225,7 +225,7 @@ void RecordTracker::print_conn_table(){
 	char d_ip_str_buf[INET_ADDRSTRLEN];
 	char s_ip_str_buf[INET_ADDRSTRLEN];
 
-	//buffer for formatted presentaton ip/msg
+	//buffer for formatted presentaton
 	char src_str[32];
 	char dst_str[32];
 
@@ -241,7 +241,7 @@ void RecordTracker::print_conn_table(){
 			inet_ntop(AF_INET, &dst.first, d_ip_str_buf, INET_ADDRSTRLEN);
 			snprintf(dst_str, sizeof(dst_str), "%-15s", d_ip_str_buf);
 
-			std::cout << "\n" << "    " << src_str << " --> " << dst_str << " " << status_str[static_cast<int>(dst.second)];
+			std::cout << "\n" << "    " << src_str << ":" << ntohs(dst.second.s_port) << " --> " << dst_str << ":" << ntohs(dst.second.d_port) << " " << status_str[static_cast<int>(dst.second.state)];
 		}
 
 		std::cout << std::endl << std::endl;
@@ -351,34 +351,37 @@ int RecordTracker::is_verified(uint32_t src, uint32_t dst){
 
 	if(conn_table.count(src) && conn_table[src].count(dst)){
 
-		return conn_table[src][dst] == TCPSTATE::VERIFIED;
+		return conn_table[src][dst].state == TCPSTATE::VERIFIED;
 	}
 	else if(conn_table.count(dst) && conn_table[dst].count(src)){
 
-		return conn_table[dst][src] == TCPSTATE::VERIFIED;
+		return conn_table[dst][src].state == TCPSTATE::VERIFIED;
 	}
 
 	return 0;
 }
 
-void RecordTracker::remove_conn(uint32_t src, uint32_t dst){
+void RecordTracker::remove_conn(uint32_t src_addr, uint32_t dst_addr, uint16_t src_port, uint16_t dst_port){
 
-	if(conn_table.count(src) && conn_table[src].count(dst)){
+	bool exists_entry_src = (conn_table.count(src_addr) && conn_table[src_addr].count(dst_addr) && conn_table[src_addr][dst_addr].s_port == src_port && conn_table[src_addr][dst_addr].d_port == dst_port);
+	bool exists_entry_dst = (conn_table.count(dst_addr) && conn_table[dst_addr].count(src_addr) && conn_table[dst_addr][src_addr].s_port == src_port && conn_table[dst_addr][src_addr].d_port == dst_port);
 
-		conn_table[src].erase(dst);
+	if(exists_entry_src){
 
-		if(conn_table[src].size() == 0){
+		conn_table[src_addr].erase(dst_addr);
 
-			conn_table.erase(src);
+		if(conn_table[src_addr].size() == 0){
+
+			conn_table.erase(src_addr);
 		}
 	}
-	else if(conn_table.count(dst) && conn_table[dst].count(src)){
+	else if(exists_entry_dst){
 
-		conn_table[dst].erase(src);
+		conn_table[dst_addr].erase(src_addr);
 
-		if(conn_table[dst].size() == 0){
+		if(conn_table[dst_addr].size() == 0){
 
-			conn_table.erase(dst);
+			conn_table.erase(dst_addr);
 		}
 	}
 }
@@ -391,20 +394,23 @@ ip_record& RecordTracker::insert_record(iphdr* ip_info, tcphdr* tcp_info, udphdr
 
 	uint32_t s_addr = ip_info->saddr;
 	uint32_t d_addr = ip_info->daddr;
-	uint16_t port = 0;
+	uint16_t s_port = 0;
+	uint16_t d_port = 0;
 	uint8_t flags = 0;
 
 	if(tcp_info){
 
-		port = tcp_info->dest;
+		s_port = tcp_info->source;
+		d_port = tcp_info->dest;
 		flags = tcp_info->th_flags;
 	}
 	else if(udp_info){
 
-		port = udp_info->dest;
+		s_port = udp_info->source;
+		d_port = udp_info->dest;
 	}
 
-	uint16_t hs_port = ntohs(port);
+	uint16_t hs_d_port = ntohs(d_port);
 
 	if(existing == false){
 
@@ -413,15 +419,15 @@ ip_record& RecordTracker::insert_record(iphdr* ip_info, tcphdr* tcp_info, udphdr
 
 		ip_r.ip = s_addr;
 		ip_r.dst_ip = d_addr;
-		ip_r.dst_port = port;
+		ip_r.dst_port = d_port;
 		ip_r.proto = ip_info->protocol;
 
 		ip_r.syn_count = 0;
 		ip_r.unv_count = 0;
 		ip_r.syn_ack_count = 0;
 
-		ip_r.dst_record[d_addr].insert(port);
-		ip_r.ports_record[port].insert(d_addr);
+		ip_r.dst_record[d_addr].insert(d_port);
+		ip_r.ports_record[d_port].insert(d_addr);
 
 		ip_r.last_seen = std::chrono::steady_clock::now();
 
@@ -446,17 +452,17 @@ ip_record& RecordTracker::insert_record(iphdr* ip_info, tcphdr* tcp_info, udphdr
 	}
 
 	ip_rec->dst_ip = d_addr;
-	ip_rec->dst_port = port;
+	ip_rec->dst_port = d_port;
 	ip_rec->proto = ip_info->protocol;
 
 	//ip_rec->flood_tracker_total += 1;
 
 	//check only for system ports to prevent false positives
-	if(hs_port < 1024 || tracked_ports.count(hs_port)){
+	if(hs_d_port < 1024 || tracked_ports.count(hs_d_port)){
 
-		ip_rec->dst_record[d_addr].insert(port);
+		ip_rec->dst_record[d_addr].insert(d_port);
 	}
-	ip_rec->ports_record[port].insert(d_addr);
+	ip_rec->ports_record[d_port].insert(d_addr);
 
 	//check for flags
 	if((flags & TH_SYN) && !(flags & TH_ACK)){
@@ -467,7 +473,9 @@ ip_record& RecordTracker::insert_record(iphdr* ip_info, tcphdr* tcp_info, udphdr
 		//prevent SYN flood from filling up memory
 		if(conn_table[s_addr].size() < 500){
 
-			conn_table[s_addr][d_addr] = TCPSTATE::SYN_OPEN;
+			conn_table[s_addr][d_addr].state = TCPSTATE::SYN_OPEN;
+			conn_table[s_addr][d_addr].s_port = s_port;
+			conn_table[s_addr][d_addr].d_port = d_port;
 		}
 
 		ip_rec->syn_count += 1;
@@ -479,7 +487,7 @@ ip_record& RecordTracker::insert_record(iphdr* ip_info, tcphdr* tcp_info, udphdr
 		if(is_waiting(s_addr, d_addr)){
 
 			//update state
-			conn_table[d_addr][s_addr] = TCPSTATE::VERIFIED;
+			conn_table[d_addr][s_addr].state = TCPSTATE::VERIFIED;
 
 			//reset counters for both addr
 			ip_rec->syn_count = 0;
@@ -502,13 +510,12 @@ ip_record& RecordTracker::insert_record(iphdr* ip_info, tcphdr* tcp_info, udphdr
 
 	if((flags & TH_RST) || (flags & TH_FIN)){
 
-		remove_conn(s_addr, d_addr);
+		remove_conn(s_addr, d_addr, s_port, d_port);
 	}
 
 	ip_rec->last_seen = std::chrono::steady_clock::now();
 
 	return *ip_rec;
-
 }
 
 void RecordTracker::update_records(){
@@ -618,8 +625,14 @@ void callback(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* pack
 		ip_record &ip_rec = ctx->r_track_ptr->insert_record(ip, tcp, udp);
 
 		ip_rec.eval_ip_record(ctx->r_track_ptr->blacklist, log_data, tcp, udp);
-		ip_rec.log_ip_record(log_data);
-		//ctx->r_track_ptr->print_conn_table();
+		if(ctx->print_stdout && !ctx->show_conn){
+
+			ip_rec.log_ip_record(log_data);
+		}
+		if(ctx->show_conn){
+
+			ctx->r_track_ptr->print_conn_table();
+		}
 		ctx->r_track_ptr->update_records(); //internaly checks if it actually has to update the records
 	}
 

@@ -63,6 +63,9 @@ struct Context{
 	int link_type;
 	int header_offset;
 
+	bool show_conn;
+	bool print_stdout;
+
 	RecordTracker* r_track_ptr;
 };
 
@@ -75,6 +78,14 @@ enum class TCPSTATE {
 	UNVERIFIED,
 	SYN_OPEN,
 	VERIFIED
+};
+
+struct conn_table_data{
+
+	TCPSTATE state;
+	uint16_t s_port;
+	uint16_t d_port;
+
 };
 
 struct ip_record{
@@ -169,13 +180,13 @@ class RecordTracker{
 
 	int is_waiting(uint32_t src, uint32_t dst);
 	int is_verified(uint32_t src, uint32_t dst);
-	void remove_conn(uint32_t src, uint32_t dst);
+	void remove_conn(uint32_t src_addr, uint32_t dst_addr, uint16_t src_port, uint16_t dst_port);
 
 	std::list<ip_record> records;
 	std::unordered_map<uint32_t, std::list<ip_record>::iterator> r_map;
 
 	//                opener_ip                   reciever_ip  state
-	std::unordered_map<uint32_t, std::unordered_map<uint32_t, TCPSTATE>> conn_table;
+	std::unordered_map<uint32_t, std::unordered_map<uint32_t, conn_table_data>> conn_table;
 
 };
 
