@@ -75,10 +75,10 @@ class ArgParser{
 
 	struct {
 
-		std::pair<bool, std::string> interface;
-		std::pair<bool, std::string> blist_name;
-		bool conn_table;
-		bool stdout;
+		std::pair<bool, std::string> interface = {false, ""};
+		std::pair<bool, std::string> blist_name = {false, ""};
+		bool conn_table = false;
+		bool en_stdout = false;
 	} flags;
 
 

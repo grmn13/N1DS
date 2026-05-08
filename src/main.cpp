@@ -50,7 +50,7 @@ int main(int argc, char* argv[]){
 	Context ctx;
 	ctx.interface = clargs.flags.interface.second;
 	ctx.show_conn = clargs.flags.conn_table;
-	ctx.print_stdout = clargs.flags.stdout;
+	ctx.print_stdout = clargs.flags.en_stdout;
 	ctx.link_type = linktype;
 	ctx.header_offset = nm.get_header_offset(linktype);
 	ctx.r_track_ptr = &r_track;

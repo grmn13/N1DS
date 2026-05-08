@@ -269,7 +269,7 @@ ArgParser::ArgParser(int argc, char* argv[]){
 		//print logs to stdout
 		else if(strcmp(argv[idx], FLAG_OUT) == 0){
 
-			flags.stdout = true;
+			flags.en_stdout = true;
 		}
 
 		idx += 1;
