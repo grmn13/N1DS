@@ -585,6 +585,7 @@ void callback(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* pack
 
 			ctx->header_offset = 18;
 		}
+		is_ipv4 = true;
 	}
 	else if(ctx->link_type == DLT_LINUX_SLL){
 		//cooked header: protocol field at bytes 14-15
