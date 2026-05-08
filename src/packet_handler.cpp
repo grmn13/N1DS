@@ -87,7 +87,7 @@ void ip_record::eval_ip_record(std::vector<ip_range> &_blacklist, std::array<int
 		log_data[LOG_IP_HSCAN] = NOTICE;
 		hscan_not = true;
 	}
-	else if(hscan_count < MAX_HSCAN_NOT){
+	else{
 
 		log_data[LOG_IP_HSCAN] = NONE;
 	}
@@ -488,9 +488,12 @@ ip_record& RecordTracker::insert_record(iphdr* ip_info, tcphdr* tcp_info, udphdr
 			ip_rec->unv_count = 0;
 			ip_rec->syn_ack_count = 0;
 
-			r_map[d_addr]->syn_count = 0;
-			r_map[d_addr]->unv_count = 0;
-			r_map[d_addr]->syn_ack_count = 0;
+			if(r_map.count(d_addr)){
+
+				r_map[d_addr]->syn_count = 0;
+				r_map[d_addr]->unv_count = 0;
+				r_map[d_addr]->syn_ack_count = 0;
+			}
 
 		}
 		else{
@@ -570,6 +573,7 @@ void callback(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* pack
 
 	struct Context* ctx = reinterpret_cast<Context*>(args);
 	struct ethhdr* eth = nullptr;
+	bool is_ipv4 = false;
 
 	//if ethernet frame
 	if(ctx->link_type == DLT_EN10MB){
@@ -582,9 +586,18 @@ void callback(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* pack
 			ctx->header_offset = 18;
 		}
 	}
+	else if(ctx->link_type == DLT_LINUX_SLL){
+		//cooked header: protocol field at bytes 14-15
+		uint16_t proto = ntohs(*(uint16_t*)(packet + 14));
+		is_ipv4 = (proto == ETH_P_IP);
+	}
+	else if(ctx->link_type == DLT_RAW || ctx->link_type == DLT_NULL){
+
+		is_ipv4 = ((packet[0] >> 4) == 4);
+	}
 
 	//if this is ipv4
-	if(ntohs(eth->h_proto) == ETH_P_IP){
+	if(is_ipv4){
 
 		struct iphdr* ip = (struct iphdr*)(packet + ctx->header_offset);
 
@@ -612,7 +625,7 @@ void callback(u_char* args, const struct pcap_pkthdr* pkthdr, const u_char* pack
 
 		std::string protocol = find_proto((int)ip->protocol);
 
-		std::array<int, LOG_IP_SIZE> log_data;
+		std::array<int, LOG_IP_SIZE> log_data = {0};
 
 		//i think idc if it is ehternet at this point but maybe
 		//im wrong and this crashes something

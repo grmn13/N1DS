@@ -26,7 +26,10 @@ int main(int argc, char* argv[]){
 	}
 
 	NetManager nm(clargs);
-	nm.init();
+	if(nm.init() == 1){
+
+		return 1;
+	}
 
 	//black listed ip addresses
 	std::vector<ip_range> blacklist;

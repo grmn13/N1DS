@@ -26,19 +26,6 @@ int NetManager::init(){
 		return 1;
 	}
 
-	pcap_if_t* dev = alldevs;
-
-	bool if_exists = false;
-
-	//check if inputted ifce matches a real ifce
-	while(dev != nullptr && !if_exists){
-
-		if(dev->name == input.if_target)
-			if_exists = true;
-
-		dev = dev->next;
-	}
-
 	//the interface not existing gets handled automatically by the error produced
 	//on the session being nullptr
 	
@@ -47,6 +34,8 @@ int NetManager::init(){
 	if(session == nullptr){
 		
 		std::cerr << "ERR: " << errbuf << std::endl;
+		pcap_freealldevs(alldevs);
+		return 1;
 	}
 
 	return 0;
